@@ -1,0 +1,22 @@
+.top-bar {
+  position: fixed;
+  top: 20px;
+  left: 20px;
+  z-index: 50;
+}
+
+.login-btn {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.8), rgba(37, 99, 235, 0.8));
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  color: #fff;
+  padding: 8px 18px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: opacity 0.15s;
+}
+
+.login-btn:hover {
+  opacity: 0.85;
+}

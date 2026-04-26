@@ -1,6 +1,4 @@
 import { useEffect, useState } from 'react'
-import { useUIStore } from '../store/uiStore'
-import './Responsive.css'
 
 export function useResponsive() {
   const [breakpoint, setBreakpoint] = useState<'mobile' | 'tablet' | 'desktop'>('desktop')

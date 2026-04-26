@@ -1,12 +1,12 @@
-import { useRef, useMemo, useEffect } from 'react'
+import { useRef, useMemo } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { cities } from '../../data/cities'
 import { latLongToVector3 } from '../../utils/coords'
+import { useUIStore } from '../../store/uiStore'
 
 const EARTH_RADIUS = 2
 
-// 生成弧形飞线路径点
 function createArcPoints(start: THREE.Vector3, end: THREE.Vector3, segments = 50): THREE.Vector3[] {
   const points: THREE.Vector3[] = []
   const mid = start.clone().add(end).multiplyScalar(0.5)
@@ -60,7 +60,7 @@ interface FlylineData {
   totalLength: number
 }
 
-function buildFlylineGeometry(
+export function buildFlylineGeometry(
   start: THREE.Vector3,
   end: THREE.Vector3,
 ): FlylineData {
@@ -82,16 +82,19 @@ function buildFlylineGeometry(
   return { positions, distances, totalLength }
 }
 
-function Flyline({
+export function Flyline({
   startCity,
   endCity,
   time,
+  color,
 }: {
   startCity: typeof cities[number]
   endCity: typeof cities[number]
   time: number
+  color?: THREE.Color
 }) {
   const meshRef = useRef<THREE.Line>(null)
+  const materialRef = useRef<THREE.ShaderMaterial>(null)
 
   const flylineData = useMemo(() => {
     const start = latLongToVector3(startCity.lat, startCity.lng, EARTH_RADIUS)
@@ -99,20 +102,11 @@ function Flyline({
     return buildFlylineGeometry(start, end)
   }, [startCity, endCity])
 
-  const material = useMemo(() => {
-    return new THREE.ShaderMaterial({
-      vertexShader: flylineMaterialVertexShader,
-      fragmentShader: flylineMaterialFragmentShader,
-      uniforms: {
-        uTime: { value: time },
-        uColor: { value: new THREE.Color(0x44aaff) },
-        uTotalLength: { value: flylineData.totalLength },
-      },
-      transparent: true,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-    })
-  }, [flylineData.totalLength, time])
+  useFrame(() => {
+    if (materialRef.current) {
+      materialRef.current.uniforms.uTime.value = time
+    }
+  })
 
   const geometry = useMemo(() => {
     const geo = new THREE.BufferGeometry()
@@ -121,18 +115,27 @@ function Flyline({
     return geo
   }, [flylineData])
 
-  useEffect(() => {
-    return () => {
-      material.dispose()
-      geometry.dispose()
-    }
-  }, [material, geometry])
-
-  return <line ref={meshRef} geometry={geometry} material={material} />
+  return (
+    <line ref={meshRef} geometry={geometry}>
+      <shaderMaterial
+        ref={materialRef}
+        vertexShader={flylineMaterialVertexShader}
+        fragmentShader={flylineMaterialFragmentShader}
+        uniforms={{
+          uTime: { value: time },
+          uColor: { value: color ?? new THREE.Color(0x44aaff) },
+          uTotalLength: { value: flylineData.totalLength },
+        }}
+        transparent
+        blending={THREE.AdditiveBlending}
+        depthWrite={false}
+      />
+    </line>
+  )
 }
 
 // 预定义飞线连接（主要城市间的连接）
-const flylinePairs = [
+export const flylinePairs: [number, number][] = [
   [0, 1], [0, 2], [0, 3], // 北京到上海、广州、深圳
   [0, 5], [0, 6], // 北京到东京、首尔
   [0, 15], [0, 20], // 北京到纽约、伦敦
@@ -166,6 +169,9 @@ const flylinePairs = [
 
 export function Flylines({ visible = true }: { visible?: boolean }) {
   const timeRef = useRef(0)
+  const customStart = useUIStore((s) => s.customFlylineStart)
+  const customEnd = useUIStore((s) => s.customFlylineEnd)
+  const flylineMode = useUIStore((s) => s.flylineMode)
 
   useFrame((_state, delta) => {
     timeRef.current += delta
@@ -183,6 +189,15 @@ export function Flylines({ visible = true }: { visible?: boolean }) {
           time={timeRef.current + i * 0.1}
         />
       ))}
+      {flylineMode && customStart && customEnd && (
+        <Flyline
+          key="custom-flyline"
+          startCity={customStart}
+          endCity={customEnd}
+          time={timeRef.current}
+          color={new THREE.Color(0xff8844)}
+        />
+      )}
     </group>
   )
 }

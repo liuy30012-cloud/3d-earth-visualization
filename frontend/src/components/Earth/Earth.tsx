@@ -1,28 +1,59 @@
 import { useRef, useEffect } from 'react'
-import { useFrame, useThree } from '@react-three/fiber'
-import { useTexture } from '@react-three/drei'
+import { useFrame, useThree, useLoader } from '@react-three/fiber'
 import * as THREE from 'three'
+import { CountryBorders } from '../CountryBorders/CountryBorders'
+import { CityMarkers } from '../CityMarkers/CityMarkers'
+import { Flylines } from '../Flylines/Flylines'
+import { Heatmap } from '../Heatmap/Heatmap'
+import { BarChart } from '../BarChart/BarChart'
+import { DayNightTerminator } from '../DayNightTerminator/DayNightTerminator'
+import { useUIStore } from '../../store/uiStore'
+
+const EARTH_RADIUS = 2
+
+const THEMES: Record<string, { earth: string; bump: string }> = {
+  satellite: { earth: '/earth-blue-marble.jpg', bump: '/earth-topology.png' },
+  dark: { earth: '/earth-night.jpg', bump: '/earth-topology.png' },
+  terrain: { earth: '/earth-topology.png', bump: '/earth-topology.png' },
+}
 
 export function Earth() {
-  const earthRef = useRef<THREE.Group>(null)
+  const earthGroupRef = useRef<THREE.Group>(null)
   const atmosphereRef = useRef<THREE.Mesh>(null)
   const { gl, camera } = useThree()
+  const layers = useUIStore((s) => s.layers)
+  const setLoadingProgress = useUIStore((s) => s.setLoadingProgress)
+  const setIsLoaded = useUIStore((s) => s.setIsLoaded)
+  const earthTheme = useUIStore((s) => s.earthTheme)
 
-  // 使用公网 CDN 的 NASA 地球纹理
-  const earthTexture = useTexture('https://unpkg.com/three-globe@2.31.1/example/img/earth-blue-marble.jpg')
-  const bumpTexture = useTexture('https://unpkg.com/three-globe@2.31.1/example/img/earth-topology.png')
+  const theme = THEMES[earthTheme] ?? THEMES.satellite
 
-  // 加载完成后设置各向异性过滤
+  const textures = useLoader(
+    THREE.TextureLoader,
+    [theme.earth, theme.bump],
+    (xhr) => {
+      if (xhr.total > 0) {
+        setLoadingProgress(Math.round((xhr.loaded / xhr.total) * 100))
+      }
+    },
+  )
+  const earthTexture = textures[0]
+  const bumpTexture = textures[1]
+
   useEffect(() => {
     if (earthTexture) {
       earthTexture.anisotropy = gl.capabilities.getMaxAnisotropy()
+      if (earthTheme === 'dark') {
+        earthTexture.colorSpace = THREE.SRGBColorSpace
+      }
     }
-  }, [earthTexture, gl.capabilities])
+    setLoadingProgress(100)
+    setTimeout(() => setIsLoaded(true), 400)
+  }, [earthTexture, bumpTexture, gl.capabilities, setLoadingProgress, setIsLoaded, earthTheme])
 
-  // 缓慢自转 + 同步大气层 Shader 相机位置
-  useFrame((_state, delta) => {
-    if (earthRef.current) {
-      earthRef.current.rotation.y += delta * 0.02
+  useFrame(() => {
+    if (earthGroupRef.current) {
+      earthGroupRef.current.rotation.y += 0.0003
     }
     if (atmosphereRef.current?.material && 'uniforms' in atmosphereRef.current.material) {
       const mat = atmosphereRef.current.material as THREE.ShaderMaterial
@@ -39,22 +70,29 @@ export function Earth() {
   }, [gl])
 
   return (
-    <group ref={earthRef}>
-      {/* 地球球体 */}
-      <mesh>
-        <sphereGeometry args={[2, 128, 128]} />
-        <meshStandardMaterial
-          map={earthTexture}
-          bumpMap={bumpTexture}
-          bumpScale={0.05}
-          roughness={0.8}
-          metalness={0.1}
-        />
-      </mesh>
+    <group ref={earthGroupRef}>
+      <group rotation={[0, -Math.PI / 2, 0]}>
+        <mesh>
+          <sphereGeometry args={[EARTH_RADIUS, 128, 128]} />
+          <meshStandardMaterial
+            map={earthTexture}
+            bumpMap={bumpTexture || undefined}
+            bumpScale={0.05}
+            roughness={0.8}
+            metalness={0.1}
+          />
+        </mesh>
 
-      {/* 大气层光晕 - 自定义 Shader */}
+        <CountryBorders visible={layers.borders} />
+        <CityMarkers visible={layers.markers} />
+        <Flylines visible={layers.flylines} />
+        <Heatmap visible={layers.heatmap} />
+        <BarChart visible={layers.barchart} />
+        <DayNightTerminator visible={layers.dayNight} />
+      </group>
+
       <mesh ref={atmosphereRef} scale={[1.03, 1.03, 1.03]}>
-        <sphereGeometry args={[2, 64, 64]} />
+        <sphereGeometry args={[EARTH_RADIUS, 64, 64]} />
         <shaderMaterial
           vertexShader={`
             varying vec3 vNormal;

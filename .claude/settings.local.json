@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install *)",
+      "Bash(curl -L -o \"e:/3d地球模型/frontend/src/assets/earth.jpg\" \"https://upload.wikimedia.org/wikipedia/commons/thumb/2/23/Blue_Marble_2002.png/1280px-Blue_Marble_2002.png\")",
+      "Bash(npx vite *)"
+    ]
+  }
+}
